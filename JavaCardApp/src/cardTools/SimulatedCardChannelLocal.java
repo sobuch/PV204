@@ -5,18 +5,22 @@ import com.licel.jcardsim.io.JavaxSmartCardInterface;
 import javax.smartcardio.*;
 import java.nio.ByteBuffer;
 
-public class CardChannelLocal extends CardChannel {
-    JavaxSmartCardInterface simulator;
-    SimulatedCard card;
+/**
+ *
+ * @author Petr Svenda
+ */
+public class SimulatedCardChannelLocal extends CardChannel {
+    JavaxSmartCardInterface m_simulator;
+    SimulatedCard m_card;
     
-    CardChannelLocal (JavaxSmartCardInterface simulator) {
-        this.simulator = simulator;
-        this.card = new SimulatedCard();
+    SimulatedCardChannelLocal (JavaxSmartCardInterface simulator) {
+        m_simulator = simulator;
+        m_card = new SimulatedCard();
     }
 
     @Override
     public Card getCard() {
-        return card;
+        return m_card;
     }
 
     @Override
@@ -30,8 +34,11 @@ public class CardChannelLocal extends CardChannel {
 
         try {
             log(apdu);
-            responseAPDU = this.simulator.transmitCommand(apdu);
+            responseAPDU = this.m_simulator.transmitCommand(apdu);
             log(responseAPDU);
+            // TODO: Add delay corresponding to real cards
+            //int delay = OperationTimes.getCardOperationDelay(apdu);
+            //Thread.sleep(delay);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -46,7 +53,7 @@ public class CardChannelLocal extends CardChannel {
 
     @Override
     public void close() throws CardException {
-        simulator.reset();
+        m_simulator.reset();
     }
     
     

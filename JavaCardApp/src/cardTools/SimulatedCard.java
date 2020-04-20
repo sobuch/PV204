@@ -5,6 +5,10 @@ import javax.smartcardio.Card;
 import javax.smartcardio.CardChannel;
 import javax.smartcardio.CardException;
 
+/**
+ *
+ * @author Petr Svenda
+ */
 public class SimulatedCard extends Card {
 
     @Override
@@ -44,6 +48,6 @@ public class SimulatedCard extends Card {
 
     @Override
     public void disconnect(boolean bln) throws CardException {
-        throw new UnsupportedOperationException("Not supported yet.");
+        // do nothing
     }
 }

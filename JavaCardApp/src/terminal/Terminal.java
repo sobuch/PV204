@@ -39,25 +39,37 @@ public class Terminal {
 
     private void connectToCard() throws Exception {
 
-        runConfig.setAppletToSimulate(JavaCardApplet.class);
 
+        final byte[] cardPIN = {'6', '6', '6', '6'};
+        final byte[] wrongCardPIN = {'6', '6', '6', '7'};
+        
+        this.runConfig.setInstallData(cardPIN);
+        this.runConfig.setTestCardType(RunConfig.CARD_TYPE.JCARDSIMLOCAL);
+        
+        
+        
+        runConfig.setAppletToSimulate(JavaCardApplet.class);
         // Connect to card
         System.out.print("Connecting to card...");
         if (!cardManager.Connect(runConfig)) {
             System.out.println(" Failed.");
         }
         System.out.println(" Done.");
+        // test wrong pin
+        final ResponseAPDU testWrongPIN = cardManager.transmit(new CommandAPDU(0x00, 0x20, 0x00, 0x00, wrongCardPIN));
+        final ResponseAPDU testOKPIN = cardManager.transmit(new CommandAPDU(0x00, 0x20, 0x00, 0x00, cardPIN));
+
 
         
     }
     
     private void sendRandomAPDU() throws CardException {
         // Transmit single APDU
-        final ResponseAPDU response = cardManager.transmit(new CommandAPDU(Util.hexStringToByteArray(STR_APDU_GETRANDOM)));
+       /* final ResponseAPDU response = cardManager.transmit(new CommandAPDU(Util.hexStringToByteArray(STR_APDU_GETRANDOM)));
         byte[] data = response.getData();
         
         final ResponseAPDU response2 = cardManager.transmit(new CommandAPDU(0xB0, 0x54, 0x00, 0x00, data)); // Use other constructor for CommandAPDU
         
-        System.out.println(response);
+        System.out.println(response);*/
     }
 }

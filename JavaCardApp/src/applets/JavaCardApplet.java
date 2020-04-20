@@ -6,7 +6,25 @@ import javacard.framework.*;
 
 public class JavaCardApplet extends javacard.framework.Applet implements MultiSelectable{
 
+    
+    
+    // usual card values
+    private static final byte SEC_PIN_MAX_LENGTH = (byte) 0x04;
+    private static final byte SEC_PIN_RETRIES = (byte) 0x03;
+    final static short SEC_PIN_VERIFY_FAILED = (short)0x9704;
+    
+    // instructions
+    private static final byte I_PIN_VERIFY = (byte)0x20;
+
+    
+    
+    private OwnerPIN accessPIN;
+    
+    
     public JavaCardApplet(byte[] buffer, short offset, byte length) {
+        accessPIN = new OwnerPIN(SEC_PIN_RETRIES, SEC_PIN_MAX_LENGTH);
+        accessPIN.update(buffer, offset, length);
+        
         register();
     }
 
@@ -15,12 +33,16 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     }
 
     public void process(APDU apdu) {
-        byte[] reply = new byte[]{1, 9, 8, 7, 1};
-        Util.arrayCopyNonAtomic(
-            reply, (short) 0,
-            apdu.getBuffer(), (short) 0,
-            (short) reply.length);
-        apdu.setOutgoingAndSend((short) 0, (short) reply.length);
+
+        
+        byte[] apduBuffer = apdu.getBuffer();
+        byte instruction = apduBuffer[ISO7816.OFFSET_INS];
+        
+        switch (instruction) {
+            case I_PIN_VERIFY:
+                verifyPIN(apdu);
+                break;
+        }
     }
 
     @Override
@@ -51,5 +73,16 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     private void clearSessionData(){
         // TODO clear or overwrite session data in RAM with bogus data
         throw new UnsupportedOperationException("Not supported yet.");
+    }
+    
+    
+    private void verifyPIN(APDU apdu) 
+    {
+        byte[] buffer = apdu.getBuffer();
+        byte bytesRead = (byte)apdu.setIncomingAndReceive();
+        
+        if (accessPIN.check(buffer, ISO7816.OFFSET_CDATA, bytesRead) == false) {
+            ISOException.throwIt(SEC_PIN_VERIFY_FAILED);
+        } 
     }
 }
