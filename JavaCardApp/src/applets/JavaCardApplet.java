@@ -100,9 +100,9 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         short bytesLength = apdu.setIncomingAndReceive();
         
         byte[] terminalShare = new byte[bytesLength];
-        Util.arrayCompare(buffer, ISO7816.OFFSET_CDATA, terminalShare, (short) 0, bytesLength);
+        Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, terminalShare, (short) 0, bytesLength);
         
-        KeyPair keyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+        KeyPair keyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_192);
         keyPair.genKeyPair();
         
         KeyAgreement dh = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH, false);
@@ -111,10 +111,10 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         byte[] secret = new byte[20];
         dh.generateSecret(terminalShare, (short) 0, (short) terminalShare.length, secret, (byte) 0);
         
-        byte[] cardShare = new byte[57];
+        byte[] cardShare = new byte[49];
         short len = ((ECPublicKey) keyPair.getPublic()).getW(cardShare, (short) 0);
         
-        Util.arrayCopy(cardShare, (short) 0, buffer, ISO7816.OFFSET_CDATA, (short) 57);
+        Util.arrayCopy(cardShare, (short) 0, buffer, ISO7816.OFFSET_CDATA, (short) 49);
         apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) len);
     }
 }
