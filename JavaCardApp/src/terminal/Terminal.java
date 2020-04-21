@@ -24,7 +24,6 @@ import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import javax.xml.bind.DatatypeConverter;
 
-
 /**
  * Terminal class.
  */
@@ -43,20 +42,19 @@ public class Terminal {
 
     public static void main(String[] args) {
         try {
-        Terminal terminal = new Terminal();
-         
-        terminal.connectToCard();
-           
+            Terminal terminal = new Terminal();
             
-        String text= "Ahoj";    
-        byte[] codedtext = new Terminal().encryptTerminal(text);
-        String decodedtext = new Terminal().decryptTerminal(codedtext);
+            terminal.connectToCard();
+            
+            String text= "Ahoj";    
+            byte[] codedtext = new Terminal().encryptTerminal(text);
+            String decodedtext = new Terminal().decryptTerminal(codedtext);
 
-        System.out.println(codedtext); // this is a byte array, you'll just see a reference to an array
-        System.out.println(decodedtext); // This correctly shows "kyle boon"
+            System.out.println(codedtext);
+            System.out.println(decodedtext); 
             
-        terminal.initEcdhSession();
-         
+            terminal.initEcdhSession();
+            
         } catch (Exception ex) {
             System.out.println("Exception : " + ex);
         }
@@ -85,7 +83,7 @@ public class Terminal {
     private void initEcdhSession() throws Exception {
        
         KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
-        ECGenParameterSpec paramSpec = new ECGenParameterSpec("secp256r1");
+        ECGenParameterSpec paramSpec = new ECGenParameterSpec("secp192r1");
         generator.initialize(paramSpec);
         KeyPair keyPair = generator.generateKeyPair();
         
@@ -100,17 +98,18 @@ public class Terminal {
         // extracting from card share
         byte[] x = new byte[24];
         byte[] y = new byte[24];
-        System.arraycopy(response.getData(), 1, x, 0, x.length);
-        System.arraycopy(response.getData(), 1 + x.length, y, 0, y.length);
+        
+        System.arraycopy(cardShare, 1, x, 0, x.length);
+        System.arraycopy(cardShare, 1 + x.length, y, 0, y.length);
+        
         BigInteger b_x = new BigInteger(x);
         BigInteger b_y = new BigInteger(y);
         
-         ECPoint points = new ECPoint (b_x,b_y);
-        
+        ECPoint points = new ECPoint (b_x, b_y);
+
         ECParameterSpec specs = ((ECPublicKey) keyPair.getPublic()).getParams();
         ECPublicKeySpec keySpecs = new ECPublicKeySpec (points, specs);
-
-        // card public key
+        
         ECPublicKey cardPublicKey = (ECPublicKey) KeyFactory.getInstance("EC").generatePublic(keySpecs);
         dh.doPhase(cardPublicKey, true);
         byte[] secret = dh.generateSecret();
@@ -118,18 +117,17 @@ public class Terminal {
         System.out.println(this.change(secret));
     }
     
+    private KeyPair createRandomKeyPairEC() throws Exception {
+        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC");
+        keyGen.initialize(new ECGenParameterSpec ("secp192r1"));
+        return keyGen.generateKeyPair();
+    }
+    
     private String change(byte[] key){
         if (key == null){
             return null;
         }
         return DatatypeConverter.printHexBinary(key);
-    }
-    
-    private KeyPair createRandomKeyPairEC() throws Exception {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
-        ECGenParameterSpec paramSpec = new ECGenParameterSpec("prime256v1");
-        generator.initialize(paramSpec);
-        return generator.generateKeyPair();
     }
 
     /*
@@ -145,21 +143,15 @@ public class Terminal {
         byte[] YBytes = y.toByteArray();
         
         int elementSize = 29;
+        
         byte[] encodedBytes = new byte[elementSize * 2 + 1];
         
-        // Uncompressed format
-        encodedBytes[0] = 0x04;
-        
-        System.arraycopy(XBytes, 0, encodedBytes, 1 + elementSize - XBytes.length, XBytes.length);
-        System.arraycopy(YBytes, 0, encodedBytes, 1 + 2 * elementSize - YBytes.length, YBytes.length);
+
+        encodedBytes[0] = (byte) 0x04;
+        System.arraycopy(XBytes, 0, encodedBytes, elementSize + 1 - XBytes.length, XBytes.length);
+        System.arraycopy(YBytes, 0, encodedBytes, elementSize * 2 + 1 - YBytes.length, YBytes.length);
         
         return encodedBytes;
-    }
-    
-    public KeyPair getRandomEcKeyPair() throws Exception {
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC");
-        keyGen.initialize(256);
-        return keyGen.generateKeyPair();
     }
     
      /*
