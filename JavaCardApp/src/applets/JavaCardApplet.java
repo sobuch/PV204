@@ -18,7 +18,18 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     private static final byte I_PIN_VERIFY = (byte)0x20;
     private static final byte I_ECDH_INIT = (byte) 0x21;
     
+    private static final byte INS_SET_DES_KEY              = (byte)0xd0;
+    private static final byte INS_SET_DES_ICV              = (byte)0xd1;
+    private static final byte INS_DO_DES_CIPHER            = (byte)0xd2;
     
+    private byte desKeyLen;
+    private byte[] desKey;
+    private byte[] desICV;
+ 
+    private Cipher desEcbCipher;
+    private Cipher desCbcCipher;
+    private Key tempDesKey2;
+    private Key tempDesKey3;
     private OwnerPIN accessPIN;
     
     
@@ -29,6 +40,72 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         register();
     }
 
+    
+        // with the help of https://javacardos.com/wiki/javacard-api-samples/des
+    private void setDesKey(APDU apdu)
+    {
+        byte[] buffer = apdu.getBuffer();
+        short bytesLength = apdu.setIncomingAndReceive();
+        
+        if (bytesLength == 16 || bytesLength == 24) {
+            this.desKeyLen = (byte) bytesLength;
+        } else {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        
+        Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, desKey, (short)0, bytesLength);
+        
+    }
+    
+    private Key getDesKey()
+    {
+        Key tempDesKey = null;
+        switch (desKeyLen)
+        {
+        case (byte)16:
+            tempDesKey = tempDesKey2;
+            break;
+        case (byte)24:
+            tempDesKey = tempDesKey3;
+            break;
+        default:
+            ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+            break;
+        }
+        //Set the 'desKey' key data value into the internal representation
+        ((DESKey)tempDesKey).setKey(desKey, (short)0);
+        return tempDesKey;
+    }
+    
+    private void setDesICV(APDU apdu)
+    {
+        byte[] buffer = apdu.getBuffer();
+        short bytesLength = apdu.setIncomingAndReceive();
+        if (bytesLength != 8)
+        {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        //Copy the incoming ICV value to the global variable 'desICV'
+        Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, desICV, (short)0, (short)8);
+    }
+    
+    private void decryptDes(APDU apdu) 
+    {
+        byte[] buffer = apdu.getBuffer();
+        short bytesLength = apdu.setIncomingAndReceive();
+        Key key = getDesKey();
+        
+        byte mode = Cipher.MODE_DECRYPT;
+        Cipher cipher = this.desCbcCipher;
+        
+        cipher.init(key, mode, desICV, (short) 0, (short) 8);
+        cipher.doFinal(buffer, ISO7816.OFFSET_CDATA, bytesLength, buffer, (short) 0);
+        
+        apdu.setOutgoingAndSend((short)0, bytesLength);
+    }
+    
+    
+    
     public static void install(byte[] bArray, short bOffset, byte bLength) {
         new JavaCardApplet(bArray, bOffset, bLength);
     }
@@ -45,6 +122,18 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
                 break;
             case I_ECDH_INIT:
                 initECDH(apdu);
+                break;
+            case INS_SET_DES_KEY:
+                //SET_DES_KEY
+                setDesKey(apdu);
+                break;
+            case INS_SET_DES_ICV:
+                //SET_DES_ICV
+                setDesICV(apdu);
+                break;
+            case INS_DO_DES_CIPHER:
+                //DO_DES_CIPHER
+                decryptDes(apdu);
                 break;
             }
         } catch (Exception e) {
