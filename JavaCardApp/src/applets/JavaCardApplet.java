@@ -3,6 +3,11 @@ package applets;
 
 
 import javacard.framework.*;
+import javacard.security.ECPrivateKey;
+import javacard.security.ECPublicKey;
+import javacard.security.KeyAgreement;
+import javacard.security.KeyBuilder;
+import javacard.security.KeyPair;
 
 public class JavaCardApplet extends javacard.framework.Applet implements MultiSelectable{
 
@@ -15,7 +20,22 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     
     // instructions
     private static final byte I_PIN_VERIFY = (byte)0x20;
+    private static final byte DF_INIT_A = (byte)0xEA;
+    private static final byte DF_INIT_B = (byte)0xEB;
 
+    
+    
+    // ECDH
+    
+    KeyPair cardKeyPair;
+    KeyAgreement cardKA, terminalKA;
+    
+    ECPublicKey cardPublicKey;
+    ECPrivateKey cardPrivateKey;
+    
+    ECPublicKey termianlPublicKey;
+    
+            
     
     
     private OwnerPIN accessPIN;
@@ -41,6 +61,10 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         switch (instruction) {
             case I_PIN_VERIFY:
                 verifyPIN(apdu);
+                break;
+            case DF_INIT_A:
+
+                ecdh_init(apdu);
                 break;
         }
     }
@@ -73,6 +97,42 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     private void clearSessionData(){
         // TODO clear or overwrite session data in RAM with bogus data
         throw new UnsupportedOperationException("Not supported yet.");
+    }
+    
+    private void ecdh_init(APDU apdu)
+    {
+ 
+        // generate keypair
+        cardKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_192);
+        cardKeyPair.genKeyPair();
+        
+        // get public and private key, based on size 192
+        cardPublicKey = (ECPublicKey) cardKeyPair.getPublic();
+        cardPrivateKey = (ECPrivateKey) cardKeyPair.getPrivate();
+        
+        
+        
+        
+        
+        // extract received key
+        byte[] buffer = apdu.getBuffer();
+        byte dataLength = (byte)apdu.setIncomingAndReceive();
+
+        byte[] terminalPublicKey = new byte[dataLength];
+
+        for (int i = 5; i < dataLength+5; i++) {
+            terminalPublicKey[i-5] = buffer[i];
+        }
+        
+        //termianlPublicKey.setW(bytes, SEC_PIN_VERIFY_FAILED, SEC_PIN_VERIFY_FAILED);
+        
+        
+        
+        short ln = cardPublicKey.getW(buffer, (short) 0x0000);
+        apdu.setOutgoingAndSend((short) 0x0000, ln);
+
+        
+        
     }
     
     
