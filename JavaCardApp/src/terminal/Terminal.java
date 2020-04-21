@@ -177,6 +177,8 @@ public class Terminal {
         final byte[] cipherText = cipher.doFinal(plainTextBytes);
         // final String encodedCipherText = new sun.misc.BASE64Encoder()
         // .encode(cipherText);
+        
+        ResponseAPDU testt = cardManager.transmit(new CommandAPDU(0x00, 0xd0, 0x00, 0x00, digestOfPassword));
 
         return cipherText;
     }

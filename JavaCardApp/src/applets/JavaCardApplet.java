@@ -49,10 +49,10 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         
         if (bytesLength == 16 || bytesLength == 24) {
             this.desKeyLen = (byte) bytesLength;
+            desKey = new byte[bytesLength];
         } else {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        
         Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, desKey, (short)0, bytesLength);
         
     }
