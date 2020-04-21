@@ -28,6 +28,9 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     // ECDH
     
     KeyPair cardKeyPair;
+    KeyPair terminalKeyPair;
+    KeyAgreement dh;
+
     KeyAgreement cardKA, terminalKA;
     
     ECPublicKey cardPublicKey;
@@ -35,7 +38,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     
     ECPublicKey termianlPublicKey;
     
-            
+    private byte secret[] = null;
     
     
     private OwnerPIN accessPIN;
@@ -118,13 +121,26 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         byte[] buffer = apdu.getBuffer();
         byte dataLength = (byte)apdu.setIncomingAndReceive();
 
-        byte[] terminalPublicKey = new byte[dataLength];
+        byte[] pk = new byte[dataLength];
 
-        for (int i = 5; i < dataLength+5; i++) {
-            terminalPublicKey[i-5] = buffer[i];
-        }
+        //for (int i = 5; i < dataLength+5; i++) {
+        //    terminalPublicKey[i-5] = buffer[i];
+        //}
         
-        //termianlPublicKey.setW(bytes, SEC_PIN_VERIFY_FAILED, SEC_PIN_VERIFY_FAILED);
+        //why no work???
+        //termianlPublicKey.setW(buffer, (short)0x05, (short)0x33);
+        
+        Util.arrayCopy(buffer, (short)0x05, pk, (short) 0, dataLength);
+        //this has to go manually
+        terminalKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_192);
+        terminalKeyPair.genKeyPair();
+    
+        dh = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH, false);
+        dh.init(cardPrivateKey);
+            
+        this.secret = new byte[21];
+        dh.generateSecret(pk, (short) 0, (short) pk.length, this.secret, (short) 0);
+        
         
         
         

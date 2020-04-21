@@ -8,12 +8,14 @@ import java.math.BigInteger;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPoint;
 import java.security.spec.ECPublicKeySpec;
+
 import javax.crypto.KeyAgreement;
 import javax.smartcardio.CardException;
 
@@ -84,11 +86,12 @@ public class Terminal {
         byte[] y = toCard.getAffineY().toByteArray();
         
         
-        byte[] terminalPublicKey = new byte[this.keySize];
+        byte[] terminalPublicKey = new byte[this.keySize+1];
         terminalPublicKey[0] = (byte) 0x04;
         System.arraycopy(x, 0, terminalPublicKey, 1 , x.length);
-        System.arraycopy(y, 0, terminalPublicKey, x.length, y.length);
+        System.arraycopy(y, 0, terminalPublicKey, 1 + x.length, y.length);
 
+        System.out.println(this.change(terminalPublicKey));
         
         return terminalPublicKey;
     }
@@ -138,11 +141,6 @@ public class Terminal {
 
         
         
-        
-       
-        
-        
-        
         // extract key from card
 
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC");
@@ -161,11 +159,19 @@ public class Terminal {
         ECParameterSpec specs = ((ECPublicKey) keyPair.getPublic()).getParams();
         ECPublicKeySpec keySpecs = new ECPublicKeySpec (points, specs);
 
+        // card public key
         ECPublicKey cardPublicKey = (ECPublicKey) KeyFactory.getInstance("EC").generatePublic(keySpecs);
+        dh.doPhase(cardPublicKey, true);
+        byte[] secret = dh.generateSecret();
+
+        System.out.println(this.change(secret));
+
         
-
-
-   
+        
+        
+        
+        
+        
         
         //final ResponseAPDU testWrongPIN = cardManager.transmit(new CommandAPDU(0x00, 0x20, 0x00, 0x00, wrongCardPIN));
         //final ResponseAPDU testOKPIN = cardManager.transmit(new CommandAPDU(0x00, 0x20, 0x00, 0x00, cardPIN));
