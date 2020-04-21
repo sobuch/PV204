@@ -35,6 +35,8 @@ public class Terminal {
     private final CardManager cardManager;
     private final RunConfig runConfig;
     
+    private byte[] secret;
+    
     public Terminal() {
         this.cardManager = new CardManager(true, APPLET_AID_BYTE);
         this.runConfig = RunConfig.getDefaultConfig();
@@ -46,14 +48,14 @@ public class Terminal {
             
             terminal.connectToCard();
             
+            terminal.initEcdhSession();
+            
             String text= "Ahoj";    
-            byte[] codedtext = new Terminal().encryptTerminal(text);
-            String decodedtext = new Terminal().decryptTerminal(codedtext);
+            byte[] codedtext = terminal.encryptTerminal(text);
+            String decodedtext = terminal.decryptTerminal(codedtext);
 
             System.out.println(codedtext);
             System.out.println(decodedtext); 
-            
-            terminal.initEcdhSession();
             
         } catch (Exception ex) {
             System.out.println("Exception : " + ex);
@@ -112,7 +114,7 @@ public class Terminal {
         
         ECPublicKey cardPublicKey = (ECPublicKey) KeyFactory.getInstance("EC").generatePublic(keySpecs);
         dh.doPhase(cardPublicKey, true);
-        byte[] secret = dh.generateSecret();
+        secret = dh.generateSecret();
 
         System.out.println(this.change(secret));
     }
@@ -160,8 +162,7 @@ public class Terminal {
     
         public byte[] encryptTerminal(String message) throws Exception {
         final MessageDigest md = MessageDigest.getInstance("md5");
-        final byte[] digestOfPassword = md.digest("HG58YZ3CR9"
-                .getBytes("utf-8"));
+        final byte[] digestOfPassword = md.digest(secret);
         final byte[] keyBytes = Arrays.copyOf(digestOfPassword, 24);
         for (int j = 0, k = 16; j < 8;) {
             keyBytes[k++] = keyBytes[j++];
@@ -182,8 +183,7 @@ public class Terminal {
         
         public String decryptTerminal(byte[] message) throws Exception {
         final MessageDigest md = MessageDigest.getInstance("md5");
-        final byte[] digestOfPassword = md.digest("HG58YZ3CR9"
-                .getBytes("utf-8"));
+        final byte[] digestOfPassword = md.digest(secret);
         final byte[] keyBytes = Arrays.copyOf(digestOfPassword, 24);
         for (int j = 0, k = 16; j < 8;) {
             keyBytes[k++] = keyBytes[j++];
