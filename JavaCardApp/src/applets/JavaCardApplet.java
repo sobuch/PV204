@@ -47,23 +47,25 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         accessPIN = new OwnerPIN(SEC_PIN_RETRIES, SEC_PIN_MAX_LENGTH);
         accessPIN.update(buffer, offset, length);
         
+        tempDesKey3 = KeyBuilder.buildKey(KeyBuilder.TYPE_DES_TRANSIENT_DESELECT, KeyBuilder.LENGTH_DES3_3KEY, false);
+        desCbcCipher = Cipher.getInstance(Cipher.ALG_DES_CBC_PKCS5, false);
+        
         register();
     }
 
     
         // with the help of https://javacardos.com/wiki/javacard-api-samples/des
-    private void setDesKey(APDU apdu)
+    private void setDesKey(byte[] key)
     {
-        byte[] buffer = apdu.getBuffer();
-        short bytesLength = apdu.setIncomingAndReceive();
         
-        if (bytesLength == 16 || bytesLength == 24) {
-            this.desKeyLen = (byte) bytesLength;
-            desKey = new byte[bytesLength];
+        if (key.length == 16 || key.length == 24) {
+            this.desKeyLen = (byte) key.length;
+            desKey = new byte[key.length];
+            System.out.println("dessss" + this.desKeyLen);
+            Util.arrayCopy(key, (short) 0x00, desKey, (short)0, (short)key.length);
         } else {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, desKey, (short)0, bytesLength);
         
     }
     
@@ -91,26 +93,46 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     {
         byte[] buffer = apdu.getBuffer();
         short bytesLength = apdu.setIncomingAndReceive();
+        
         if (bytesLength != 8)
         {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         //Copy the incoming ICV value to the global variable 'desICV'
+        desICV = new byte[8];
         Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, desICV, (short)0, (short)8);
+    }
+    
+    private String change(byte[] key){
+        if (key == null){
+            return null;
+        }
+        return DatatypeConverter.printHexBinary(key);
     }
     
     private void decryptDes(APDU apdu) 
     {
         byte[] buffer = apdu.getBuffer();
         short bytesLength = apdu.setIncomingAndReceive();
+        
         Key key = getDesKey();
         
         byte mode = Cipher.MODE_DECRYPT;
         Cipher cipher = this.desCbcCipher;
         
-        cipher.init(key, mode, desICV, (short) 0, (short) 8);
-        cipher.doFinal(buffer, ISO7816.OFFSET_CDATA, bytesLength, buffer, (short) 0);
+        System.out.println("ssss card key" + change(this.desKey));
+        System.out.println("ssss ICV" + change(this.desICV));
         
+        cipher.init(key, mode, desICV, (short) 0, (short) 8);
+        
+        byte[] output = new byte[buffer[4]];
+        
+        
+        
+        cipher.doFinal(buffer, ISO7816.OFFSET_CDATA, buffer[4], buffer, (short) 0);
+        System.out.println("OUTPUT" + change(output) + ", " + buffer[4]);
+        
+        //Util.arrayCopy(output, (short) 0x00, buffer, (short)0, (short) output.length);
         apdu.setOutgoingAndSend((short)0, bytesLength);
     }
     
@@ -136,10 +158,6 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
                     break;
                 case I_ECDH_INIT:
                     initECDH(apdu);
-                    break;
-                case INS_SET_DES_KEY:
-                    //SET_DES_KEY
-                    setDesKey(apdu);
                     break;
                 case INS_SET_DES_ICV:
                     //SET_DES_ICV
@@ -243,18 +261,16 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         
         Util.arrayCopy(keyPair.getPublic().getEncoded(), (short) 0, buffer, ISO7816.OFFSET_CDATA, (short) 75);
         
+        setDesKey(secret);
+        
+        
         System.out.println("Secret on card side: " + this.change(secret));
         System.out.println("CARD: Card public key: " + this.change(keyPair.getPublic().getEncoded()));
         
         apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) pub.getEncoded().length);
     }
     
-    private String change(byte[] key){
-        if (key == null){
-            return null;
-        }
-        return DatatypeConverter.printHexBinary(key);
-    }
+
     
     
     private void sendTerminationInfo(APDU apdu)
