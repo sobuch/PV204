@@ -21,15 +21,16 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     private static final byte INS_SET_DES_KEY              = (byte)0xd0;
     private static final byte INS_SET_DES_ICV              = (byte)0xd1;
     private static final byte INS_DO_DES_CIPHER            = (byte)0xd2;
+    private static final byte INS_CLEAR_DATA               = (byte)0xff;
     
     private byte desKeyLen;
-    private byte[] desKey;
-    private byte[] desICV;
+    private byte[] desKey = null;
+    private byte[] desICV = null;
  
     private Cipher desEcbCipher;
     private Cipher desCbcCipher;
-    private Key tempDesKey2;
-    private Key tempDesKey3;
+    private Key tempDesKey2 = null;
+    private Key tempDesKey3 = null;
     private OwnerPIN accessPIN;
     
     
@@ -117,24 +118,28 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         byte instruction = apduBuffer[ISO7816.OFFSET_INS];
         try {
             switch (instruction) {
-            case I_PIN_VERIFY:
-                verifyPIN(apdu);
-                break;
-            case I_ECDH_INIT:
-                initECDH(apdu);
-                break;
-            case INS_SET_DES_KEY:
-                //SET_DES_KEY
-                setDesKey(apdu);
-                break;
-            case INS_SET_DES_ICV:
-                //SET_DES_ICV
-                setDesICV(apdu);
-                break;
-            case INS_DO_DES_CIPHER:
-                //DO_DES_CIPHER
-                decryptDes(apdu);
-                break;
+                case INS_CLEAR_DATA:
+                    clearSessionData();
+                    sendTerminationInfo(apdu);
+                    break;
+                case I_PIN_VERIFY:
+                    verifyPIN(apdu);
+                    break;
+                case I_ECDH_INIT:
+                    initECDH(apdu);
+                    break;
+                case INS_SET_DES_KEY:
+                    //SET_DES_KEY
+                    setDesKey(apdu);
+                    break;
+                case INS_SET_DES_ICV:
+                    //SET_DES_ICV
+                    setDesICV(apdu);
+                    break;
+                case INS_DO_DES_CIPHER:
+                    //DO_DES_CIPHER
+                    decryptDes(apdu);
+                    break;
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -168,8 +173,19 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
      * Method used to clear session data in RAM.
      */
     private void clearSessionData(){
-        // TODO clear or overwrite session data in RAM with bogus data
-        throw new UnsupportedOperationException("Not supported yet.");
+        if (tempDesKey2 != null) {
+            tempDesKey2.clearKey();
+        }
+        if (tempDesKey3 != null) {
+            tempDesKey3.clearKey();
+        }
+        if (desKey != null) {
+            Util.arrayFillNonAtomic(desKey, (short) 0, (short) desKey.length, (byte) 0);
+        }
+        if (desICV != null) {
+            Util.arrayFillNonAtomic(desICV, (short) 0, (short) desICV.length, (byte) 0);
+        }
+        desKeyLen = (byte) 0x00;
     }
     
     
@@ -206,4 +222,21 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         Util.arrayCopy(cardShare, (short) 0, buffer, ISO7816.OFFSET_CDATA, (short) 49);
         apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) len);
     }
+    
+    
+    private void sendTerminationInfo(APDU apdu)
+    {
+        byte[] buffer = apdu.getBuffer();
+        short bytesLength = apdu.setIncomingAndReceive();
+        byte[] msg = new byte[4];
+        msg[0] = (byte) 0xff;
+        msg[1] = (byte) 0xff;
+        msg[2] = (byte) 0xff;
+        msg[3] = (byte) 0xff;
+        Util.arrayCopy(msg, (short) 0, buffer, (short) 0x00, (short) 0x04);
+        apdu.setOutgoingAndSend((short) 0x00, (short) 0x04);
+
+
+    }
+    
 }
