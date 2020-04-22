@@ -1,11 +1,14 @@
 package applets;
 
 
+import java.security.KeyFactory;
 import java.security.KeyPairGenerator;
 import java.security.spec.ECGenParameterSpec;
+import java.security.spec.X509EncodedKeySpec;
 import javacard.framework.*;
 import javacard.security.*;
 import javacardx.crypto.*;
+import javax.xml.bind.DatatypeConverter;
 
 public class JavaCardApplet extends javacard.framework.Applet implements MultiSelectable{
 
@@ -38,6 +41,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     private OwnerPIN accessPIN;
     
     private byte cardBalance = 0;
+    private byte[] secret;
     
     public JavaCardApplet(byte[] buffer, short offset, byte length) {
         accessPIN = new OwnerPIN(SEC_PIN_RETRIES, SEC_PIN_MAX_LENGTH);
@@ -219,20 +223,37 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         byte[] terminalShare = new byte[bytesLength];
         Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, terminalShare, (short) 0, bytesLength);
         
-        KeyPair keyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_192);
-        keyPair.genKeyPair();
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+        ECGenParameterSpec paramSpec = new ECGenParameterSpec("secp192r1");
+        generator.initialize(paramSpec);
+        java.security.KeyPair keyPair = generator.generateKeyPair();
         
-        KeyAgreement dh = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH, false);
+        javax.crypto.KeyAgreement dh = javax.crypto.KeyAgreement.getInstance("ECDH");
         dh.init(keyPair.getPrivate());
+
+        X509EncodedKeySpec formatted_public = new X509EncodedKeySpec(terminalShare);
         
-        byte[] secret = new byte[20];
-        dh.generateSecret(terminalShare, (short) 0, (short) terminalShare.length, secret, (byte) 0);
+        KeyFactory kf = KeyFactory.getInstance("EC");
+
+        java.security.PublicKey pub = kf.generatePublic(formatted_public);
         
-        byte[] cardShare = new byte[49];
-        short len = ((ECPublicKey) keyPair.getPublic()).getW(cardShare, (short) 0);
+        dh.doPhase((java.security.Key) pub, true);
         
-        Util.arrayCopy(cardShare, (short) 0, buffer, ISO7816.OFFSET_CDATA, (short) 49);
-        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) len);
+        secret = dh.generateSecret();
+        
+        Util.arrayCopy(keyPair.getPublic().getEncoded(), (short) 0, buffer, ISO7816.OFFSET_CDATA, (short) 75);
+        
+        System.out.println("Secret on card side: " + this.change(secret));
+        System.out.println("CARD: Card public key: " + this.change(keyPair.getPublic().getEncoded()));
+        
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) pub.getEncoded().length);
+    }
+    
+    private String change(byte[] key){
+        if (key == null){
+            return null;
+        }
+        return DatatypeConverter.printHexBinary(key);
     }
     
     

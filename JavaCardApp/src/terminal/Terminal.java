@@ -14,6 +14,7 @@ import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPoint;
 import java.security.spec.ECPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
@@ -91,32 +92,24 @@ public class Terminal {
         
         KeyAgreement dh = KeyAgreement.getInstance("ECDH");
         dh.init(keyPair.getPrivate());
-        byte[] terminalShare = encodePublicKey((ECPublicKey) keyPair.getPublic());
+        
+        byte[] terminalShare = ((ECPublicKey) keyPair.getPublic()).getEncoded();
                 
         final ResponseAPDU response = cardManager.transmit(new CommandAPDU(0x00, 0x21, 0x00, 0x00, terminalShare));
-        final byte[] cardShare = response.getData();
-        System.out.println("Card shared ECDH.");
+        final byte[] cardPublicKey = response.getData();
+        System.out.println("TERMINAL: Card public key: " + this.change(cardPublicKey));
               
-        // extracting from card share
-        byte[] x = new byte[24];
-        byte[] y = new byte[24];
-        
-        System.arraycopy(cardShare, 1, x, 0, x.length);
-        System.arraycopy(cardShare, 1 + x.length, y, 0, y.length);
-        
-        BigInteger b_x = new BigInteger(x);
-        BigInteger b_y = new BigInteger(y);
-        
-        ECPoint points = new ECPoint (b_x, b_y);
+        // extracting card public key
+        X509EncodedKeySpec formatted_public = new X509EncodedKeySpec(cardPublicKey);
+        KeyFactory kf = KeyFactory.getInstance("EC");
 
-        ECParameterSpec specs = ((ECPublicKey) keyPair.getPublic()).getParams();
-        ECPublicKeySpec keySpecs = new ECPublicKeySpec (points, specs);
+        java.security.PublicKey pub = kf.generatePublic(formatted_public);
         
-        ECPublicKey cardPublicKey = (ECPublicKey) KeyFactory.getInstance("EC").generatePublic(keySpecs);
-        dh.doPhase(cardPublicKey, true);
+        dh.doPhase(pub, true);
         secret = dh.generateSecret();
 
-        System.out.println(this.change(secret));
+        System.out.println("Secret on terminal side: " + this.change(secret));
+
     }
     
     private KeyPair createRandomKeyPairEC() throws Exception {
