@@ -21,7 +21,11 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     private static final byte INS_SET_DES_KEY              = (byte)0xd0;
     private static final byte INS_SET_DES_ICV              = (byte)0xd1;
     private static final byte INS_DO_DES_CIPHER            = (byte)0xd2;
+    
     private static final byte INS_CLEAR_DATA               = (byte)0xff;
+    
+    private static final byte INS_BALANCE_ADD              = (byte)0xc0;
+    private static final byte INS_BALANCE_REMOVE           = (byte)0xc1;
     
     private byte desKeyLen;
     private byte[] desKey = null;
@@ -33,6 +37,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     private Key tempDesKey3 = null;
     private OwnerPIN accessPIN;
     
+    private byte cardBalance = 0;
     
     public JavaCardApplet(byte[] buffer, short offset, byte length) {
         accessPIN = new OwnerPIN(SEC_PIN_RETRIES, SEC_PIN_MAX_LENGTH);
@@ -140,6 +145,13 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
                     //DO_DES_CIPHER
                     decryptDes(apdu);
                     break;
+                case INS_BALANCE_ADD:
+                    addBalance(apdu);
+                    break;
+                case INS_BALANCE_REMOVE:
+                    removeBalance(apdu);
+                    break;
+                  
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -237,6 +249,33 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         apdu.setOutgoingAndSend((short) 0x00, (short) 0x04);
 
 
+    }
+    
+    private void addBalance(APDU apdu)
+    {
+        byte[] buffer = apdu.getBuffer();
+        byte amount = buffer[2];
+        
+        this.cardBalance += amount;
+        
+        buffer[0] = this.cardBalance;
+        apdu.setOutgoingAndSend((short) 0x00, (short) 0x01);
+        
+    }
+    
+        private void removeBalance(APDU apdu)
+    {
+        byte[] buffer = apdu.getBuffer();
+        byte amount = buffer[2];
+        
+        this.cardBalance -= amount;
+        if (this.cardBalance < 0) {
+            this.cardBalance = 0;
+        }
+        
+        buffer[0] = this.cardBalance;
+        apdu.setOutgoingAndSend((short) 0x00, (short) 0x01);
+        
     }
     
 }
