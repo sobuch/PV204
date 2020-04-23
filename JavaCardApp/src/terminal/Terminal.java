@@ -4,16 +4,12 @@ import applets.JavaCardApplet;
 import cardTools.CardManager;
 import cardTools.RunConfig;
 import cardTools.Util;
-import java.math.BigInteger;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
-import java.security.spec.ECParameterSpec;
-import java.security.spec.ECPoint;
-import java.security.spec.ECPublicKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import javax.crypto.Cipher;
@@ -32,7 +28,6 @@ public class Terminal {
     private static String APPLET_AID = "482871d58ab7465e5e05";
     private static byte APPLET_AID_BYTE[] = Util.hexStringToByteArray(APPLET_AID);
 
-    private static final String STR_APDU_GETRANDOM = "B054100000";
     private final CardManager cardManager;
     private final RunConfig runConfig;
     
@@ -85,10 +80,7 @@ public class Terminal {
     
     private void initEcdhSession() throws Exception {
        
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
-        ECGenParameterSpec paramSpec = new ECGenParameterSpec("secp192r1");
-        generator.initialize(paramSpec);
-        KeyPair keyPair = generator.generateKeyPair();
+        KeyPair keyPair = generateKeyPair();
         
         KeyAgreement dh = KeyAgreement.getInstance("ECDH");
         dh.init(keyPair.getPrivate());
@@ -96,64 +88,41 @@ public class Terminal {
         byte[] terminalShare = ((ECPublicKey) keyPair.getPublic()).getEncoded();
                 
         final ResponseAPDU response = cardManager.transmit(new CommandAPDU(0x00, 0x21, 0x00, 0x00, terminalShare));
-        final byte[] cardPublicKey = response.getData();
-        System.out.println("TERMINAL: Card public key: " + this.change(cardPublicKey));
-              
-        // extracting card public key
-        X509EncodedKeySpec formatted_public = new X509EncodedKeySpec(cardPublicKey);
-        KeyFactory kf = KeyFactory.getInstance("EC");
+        final byte[] cardResponseData = response.getData();
+        System.out.println("TERMINAL: Card public key: " + this.change(cardResponseData));
 
-        java.security.PublicKey pub = kf.generatePublic(formatted_public);
+        java.security.PublicKey pub = extractCardPK(cardResponseData);
         
         dh.doPhase(pub, true);
         secret = dh.generateSecret();
 
         System.out.println("Secret on terminal side: " + this.change(secret));
-
     }
     
-    private KeyPair createRandomKeyPairEC() throws Exception {
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC");
-        keyGen.initialize(new ECGenParameterSpec ("secp192r1"));
-        return keyGen.generateKeyPair();
+    private KeyPair generateKeyPair() throws Exception{
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+        ECGenParameterSpec paramSpec = new ECGenParameterSpec("secp192r1");
+        generator.initialize(paramSpec);
+        return generator.generateKeyPair();
     }
     
-    private String change(byte[] key){
-        if (key == null){
+    private java.security.PublicKey extractCardPK(byte[] cardResponseData) throws Exception {
+        X509EncodedKeySpec formatted_public = new X509EncodedKeySpec(cardResponseData);
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        return kf.generatePublic(formatted_public);
+    }
+    
+    private String change(byte[] key) {
+        if (key == null) {
             return null;
         }
         return DatatypeConverter.printHexBinary(key);
     }
-
+    
     /*
-    https://www.codota.com/code/java/methods/java.security.spec.ECPoint/getAffineX
-    */
-    private byte[] encodePublicKey(ECPublicKey publicKey) {
-        ECPoint w = publicKey.getW();
-        
-        BigInteger x = w.getAffineX();
-        BigInteger y = w.getAffineY();
-        
-        byte[] XBytes = x.toByteArray();
-        byte[] YBytes = y.toByteArray();
-        
-        int elementSize = 29;
-        
-        byte[] encodedBytes = new byte[elementSize * 2 + 1];
-        
-
-        encodedBytes[0] = (byte) 0x04;
-        System.arraycopy(XBytes, 0, encodedBytes, elementSize + 1 - XBytes.length, XBytes.length);
-        System.arraycopy(YBytes, 0, encodedBytes, elementSize * 2 + 1 - YBytes.length, YBytes.length);
-        
-        return encodedBytes;
-    }
-    
-     /*
-   https://stackoverflow.com/questions/20227/how-do-i-use-3des-encryption-decryption-in-java?fbclid=IwAR3pGgJKW7RdwZQyTAgrTEaRbMzsNruCS92fBpici06SHnRNvgWiqtBsmq0
-    */
-    
-        public byte[] encryptTerminal(String message) throws Exception {
+     * https://stackoverflow.com/questions/20227/how-do-i-use-3des-encryption-decryption-in-java?fbclid=IwAR3pGgJKW7RdwZQyTAgrTEaRbMzsNruCS92fBpici06SHnRNvgWiqtBsmq0
+     */
+    public byte[] encryptTerminal(String message) throws Exception {
         final MessageDigest md = MessageDigest.getInstance("md5");
         final byte[] digestOfPassword = md.digest(secret);
         final byte[] keyBytes = Arrays.copyOf(digestOfPassword, 24);
@@ -163,6 +132,9 @@ public class Terminal {
 
         final SecretKey key = new SecretKeySpec(keyBytes, "DESede");
         final IvParameterSpec iv = new IvParameterSpec(new byte[8]);
+        
+        ResponseAPDU IVappdu = cardManager.transmit(new CommandAPDU(0x00, 0xd0, 0x00, 0x00, iv.getIV()));
+        
         final Cipher cipher = Cipher.getInstance("DESede/CBC/PKCS5Padding");
         cipher.init(Cipher.ENCRYPT_MODE, key, iv);
 
@@ -176,7 +148,7 @@ public class Terminal {
         return cipherText;
     }
         
-        public String decryptTerminal(byte[] message) throws Exception {
+    public String decryptTerminal(byte[] message) throws Exception {
         final MessageDigest md = MessageDigest.getInstance("md5");
         final byte[] digestOfPassword = md.digest(secret);
         final byte[] keyBytes = Arrays.copyOf(digestOfPassword, 24);
@@ -194,5 +166,5 @@ public class Terminal {
         final byte[] plainText = decipher.doFinal(message);
 
         return new String(plainText, "UTF-8");
-        }
+    }
 }

@@ -1,6 +1,5 @@
 package applets;
 
-
 import java.security.KeyFactory;
 import java.security.KeyPairGenerator;
 import java.security.spec.ECGenParameterSpec;
@@ -55,9 +54,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
 
     
         // with the help of https://javacardos.com/wiki/javacard-api-samples/des
-    private void setDesKey(byte[] key)
-    {
-        
+    private void setDesKey(byte[] key) {  
         if (key.length == 16 || key.length == 24) {
             this.desKeyLen = (byte) key.length;
             desKey = new byte[key.length];
@@ -65,12 +62,10 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
             Util.arrayCopy(key, (short) 0x00, desKey, (short)0, (short)key.length);
         } else {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-        }
-        
+        }    
     }
     
-    private Key getDesKey()
-    {
+    private Key getDesKey() {
         Key tempDesKey = null;
         switch (desKeyLen)
         {
@@ -89,8 +84,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         return tempDesKey;
     }
     
-    private void setDesICV(APDU apdu)
-    {
+    private void setDesICV(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         short bytesLength = apdu.setIncomingAndReceive();
         
@@ -103,15 +97,14 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, desICV, (short)0, (short)8);
     }
     
-    private String change(byte[] key){
-        if (key == null){
+    private String change(byte[] key) {
+        if (key == null) {
             return null;
         }
         return DatatypeConverter.printHexBinary(key);
     }
     
-    private void decryptDes(APDU apdu) 
-    {
+    private void decryptDes(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         short bytesLength = apdu.setIncomingAndReceive();
         
@@ -125,9 +118,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         
         cipher.init(key, mode, desICV, (short) 0, (short) 8);
         
-        byte[] output = new byte[buffer[4]];
-        
-        
+        byte[] output = new byte[buffer[4]]; 
         
         cipher.doFinal(buffer, ISO7816.OFFSET_CDATA, buffer[4], buffer, (short) 0);
         System.out.println("OUTPUT" + change(output) + ", " + buffer[4]);
@@ -143,8 +134,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     }
 
     public void process(APDU apdu) {
-
-        
+       
         byte[] apduBuffer = apdu.getBuffer();
         byte instruction = apduBuffer[ISO7816.OFFSET_INS];
         try {
@@ -177,8 +167,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
             }
         } catch (Exception e) {
             e.printStackTrace();
-        }
-        
+        }    
     }
 
     @Override
@@ -223,8 +212,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
     }
     
     
-    private void verifyPIN(APDU apdu) 
-    {
+    private void verifyPIN(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         byte bytesRead = (byte)apdu.setIncomingAndReceive();
         /*
@@ -241,19 +229,12 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         byte[] terminalShare = new byte[bytesLength];
         Util.arrayCopy(buffer, ISO7816.OFFSET_CDATA, terminalShare, (short) 0, bytesLength);
         
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
-        ECGenParameterSpec paramSpec = new ECGenParameterSpec("secp192r1");
-        generator.initialize(paramSpec);
-        java.security.KeyPair keyPair = generator.generateKeyPair();
+        java.security.KeyPair keyPair = generateKeyPair();
         
         javax.crypto.KeyAgreement dh = javax.crypto.KeyAgreement.getInstance("ECDH");
         dh.init(keyPair.getPrivate());
 
-        X509EncodedKeySpec formatted_public = new X509EncodedKeySpec(terminalShare);
-        
-        KeyFactory kf = KeyFactory.getInstance("EC");
-
-        java.security.PublicKey pub = kf.generatePublic(formatted_public);
+        java.security.PublicKey pub = extractTerminalPK(terminalShare);
         
         dh.doPhase((java.security.Key) pub, true);
         
@@ -261,8 +242,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         
         Util.arrayCopy(keyPair.getPublic().getEncoded(), (short) 0, buffer, ISO7816.OFFSET_CDATA, (short) 75);
         
-        setDesKey(secret);
-        
+        setDesKey(secret);       
         
         System.out.println("Secret on card side: " + this.change(secret));
         System.out.println("CARD: Card public key: " + this.change(keyPair.getPublic().getEncoded()));
@@ -270,11 +250,20 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) pub.getEncoded().length);
     }
     
-
+    private java.security.KeyPair generateKeyPair() throws Exception{
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+        ECGenParameterSpec paramSpec = new ECGenParameterSpec("secp192r1");
+        generator.initialize(paramSpec);
+        return generator.generateKeyPair();
+    }
     
-    
-    private void sendTerminationInfo(APDU apdu)
-    {
+    private java.security.PublicKey extractTerminalPK(byte[] terminalData) throws Exception {
+        X509EncodedKeySpec formatted_public = new X509EncodedKeySpec(terminalData);
+        KeyFactory kf = KeyFactory.getInstance("EC");
+        return kf.generatePublic(formatted_public);
+    }
+   
+    private void sendTerminationInfo(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         short bytesLength = apdu.setIncomingAndReceive();
         byte[] msg = new byte[4];
@@ -285,23 +274,19 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         Util.arrayCopy(msg, (short) 0, buffer, (short) 0x00, (short) 0x04);
         apdu.setOutgoingAndSend((short) 0x00, (short) 0x04);
 
-
     }
     
-    private void addBalance(APDU apdu)
-    {
+    private void addBalance(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         byte amount = buffer[2];
         
         this.cardBalance += amount;
         
         buffer[0] = this.cardBalance;
-        apdu.setOutgoingAndSend((short) 0x00, (short) 0x01);
-        
+        apdu.setOutgoingAndSend((short) 0x00, (short) 0x01);    
     }
     
-        private void removeBalance(APDU apdu)
-    {
+    private void removeBalance(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         byte amount = buffer[2];
         
@@ -311,8 +296,6 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         }
         
         buffer[0] = this.cardBalance;
-        apdu.setOutgoingAndSend((short) 0x00, (short) 0x01);
-        
-    }
-    
+        apdu.setOutgoingAndSend((short) 0x00, (short) 0x01);   
+    }  
 }
