@@ -1,9 +1,13 @@
 package applets;
 
+import java.nio.ByteBuffer;
 import java.security.KeyFactory;
 import java.security.KeyPairGenerator;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import javacard.framework.*;
 import javacard.security.*;
 import javacardx.crypto.*;
@@ -234,9 +238,9 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         javax.crypto.KeyAgreement dh = javax.crypto.KeyAgreement.getInstance("ECDH");
         dh.init(keyPair.getPrivate());
 
-        java.security.PublicKey pub = extractTerminalPK(terminalShare);
+        java.security.PublicKey terminalPK = extractTerminalPK(terminalShare);
         
-        dh.doPhase((java.security.Key) pub, true);
+        dh.doPhase((java.security.Key) terminalPK, true);
         
         secret = dh.generateSecret();
         
@@ -247,7 +251,24 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         System.out.println("Secret on card side: " + this.change(secret));
         System.out.println("CARD: Card public key: " + this.change(keyPair.getPublic().getEncoded()));
         
-        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) pub.getEncoded().length);
+        apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, (short) terminalPK.getEncoded().length);
+        
+        byte[] derivedKey = deriveSessionKey(keyPair.getPublic().getEncoded(), terminalPK.getEncoded());
+        System.out.printf("Final key: %s%n", change(derivedKey));
+    }
+    
+    /**
+     * https://neilmadden.blog/2016/05/20/ephemeral-elliptic-curve-diffie-hellman-key-agreement-in-java/?fbclid=IwAR24l7jCZR7i9h3gmBRFkjevo1UcN7n1avPc9Npc6IG-4pjScP-aUS8xBws
+     */
+    private byte[] deriveSessionKey(byte[] cardPK, byte[] terminalPK) throws Exception {
+        java.security.MessageDigest hash = java.security.MessageDigest.getInstance("SHA-256");
+        hash.update(secret);
+        // Simple deterministic ordering
+        List<ByteBuffer> keys = Arrays.asList(ByteBuffer.wrap(cardPK), ByteBuffer.wrap(terminalPK));
+        Collections.sort(keys);
+        hash.update(keys.get(0));
+        hash.update(keys.get(1));
+        return hash.digest();
     }
     
     private java.security.KeyPair generateKeyPair() throws Exception{

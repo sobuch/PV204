@@ -4,6 +4,7 @@ import applets.JavaCardApplet;
 import cardTools.CardManager;
 import cardTools.RunConfig;
 import cardTools.Util;
+import java.nio.ByteBuffer;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -12,6 +13,8 @@ import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
 import javax.crypto.SecretKey;
@@ -91,12 +94,23 @@ public class Terminal {
         final byte[] cardResponseData = response.getData();
         System.out.println("TERMINAL: Card public key: " + this.change(cardResponseData));
 
-        java.security.PublicKey pub = extractCardPK(cardResponseData);
+        java.security.PublicKey cardPK = extractCardPK(cardResponseData);
         
-        dh.doPhase(pub, true);
+        dh.doPhase(cardPK, true);
         secret = dh.generateSecret();
 
         System.out.println("Secret on terminal side: " + this.change(secret));
+        
+        MessageDigest hash = MessageDigest.getInstance("SHA-256");
+        hash.update(secret);
+        // Simple deterministic ordering
+        List<ByteBuffer> keys = Arrays.asList(ByteBuffer.wrap(keyPair.getPublic().getEncoded()), ByteBuffer.wrap(cardPK.getEncoded()));
+        Collections.sort(keys);
+        hash.update(keys.get(0));
+        hash.update(keys.get(1));
+
+        byte[] derivedKey = deriveSessionKey(keyPair.getPublic().getEncoded(), cardPK.getEncoded());
+        System.out.printf("Final key: %s%n", change(derivedKey));
     }
     
     private KeyPair generateKeyPair() throws Exception{
@@ -110,6 +124,19 @@ public class Terminal {
         X509EncodedKeySpec formatted_public = new X509EncodedKeySpec(cardResponseData);
         KeyFactory kf = KeyFactory.getInstance("EC");
         return kf.generatePublic(formatted_public);
+    }
+    /**
+     * https://neilmadden.blog/2016/05/20/ephemeral-elliptic-curve-diffie-hellman-key-agreement-in-java/?fbclid=IwAR24l7jCZR7i9h3gmBRFkjevo1UcN7n1avPc9Npc6IG-4pjScP-aUS8xBws
+     */
+    private byte[] deriveSessionKey(byte[] terminalPK, byte[] cardPK) throws Exception {
+        java.security.MessageDigest hash = java.security.MessageDigest.getInstance("SHA-256");
+        hash.update(secret);
+        // Simple deterministic ordering
+        List<ByteBuffer> keys = Arrays.asList(ByteBuffer.wrap(terminalPK), ByteBuffer.wrap(cardPK));
+        Collections.sort(keys);
+        hash.update(keys.get(0));
+        hash.update(keys.get(1));
+        return hash.digest();
     }
     
     private String change(byte[] key) {
