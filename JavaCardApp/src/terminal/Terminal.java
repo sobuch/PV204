@@ -22,7 +22,6 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
-import javax.xml.bind.DatatypeConverter;
 
 /**
  * Terminal class.
@@ -143,7 +142,7 @@ public class Terminal {
         if (key == null) {
             return null;
         }
-        return DatatypeConverter.printHexBinary(key);
+        return Util.bytesToHex(key);
     }
     
     /*

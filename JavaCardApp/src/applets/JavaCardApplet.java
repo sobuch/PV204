@@ -11,7 +11,6 @@ import java.util.List;
 import javacard.framework.*;
 import javacard.security.*;
 import javacardx.crypto.*;
-import javax.xml.bind.DatatypeConverter;
 
 public class JavaCardApplet extends javacard.framework.Applet implements MultiSelectable{
 
@@ -105,7 +104,7 @@ public class JavaCardApplet extends javacard.framework.Applet implements MultiSe
         if (key == null) {
             return null;
         }
-        return DatatypeConverter.printHexBinary(key);
+        return cardTools.Util.bytesToHex(key);
     }
     
     private void decryptDes(APDU apdu) {
